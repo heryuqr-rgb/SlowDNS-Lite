@@ -463,11 +463,8 @@ class MainActivity : Activity() {
         })
         content.addView(homePage)
 
-        val settingsPage = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            visibility = View.GONE
-        }
-        settingsPage.addView(label("Pengaturan koneksi", 20f, ink, true))
+        // Internal parsed fields are retained for the tunnel engine, but the
+        // previous manual-entry screen is removed from the user interface.
         dns = field("DNS Resolver", "1.1.1.1")
         domain = field("Nameserver / Tunnel Domain")
         pubkey = field("Server Public Key (64 hex)")
@@ -475,30 +472,34 @@ class MainActivity : Activity() {
         sshPort = field("SSH Port", "22")
         sshUser = field("SSH Username")
         sshPass = field("SSH Password", password = true)
-        val settingFields = listOf(
-            "DNS RESOLVER" to dns, "NAMESERVER" to domain, "PUBLIC KEY" to pubkey,
-            "SSH HOST" to sshHost, "SSH PORT" to sshPort, "SSH USERNAME" to sshUser,
-            "SSH PASSWORD" to sshPass
-        )
-        settingFields.forEach { (caption, input) ->
-            settingsPage.addView(label(caption, 12f, muted, true))
-            settingsPage.addView(input, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(48)
-            ).apply { bottomMargin = dp(8) })
+
+        val settingsPage = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
         }
-        val save = button("SIMPAN PROFIL", Color.rgb(104, 164, 35))
-        save.setOnClickListener {
-            getSharedPreferences("slowdns_profile", MODE_PRIVATE).edit()
-                .putString("config", configInput.text.toString())
-                .putString("dns", dns.text.toString())
-                .putString("domain", domain.text.toString())
-                .putString("pubkey", pubkey.text.toString())
-                .putString("sshHost", sshHost.text.toString())
-                .putString("sshPort", sshPort.text.toString())
-                .putString("sshUser", sshUser.text.toString()).apply()
-            Toast.makeText(this, "Profil disimpan", Toast.LENGTH_SHORT).show()
+        settingsPage.addView(label("Pengaturan", 22f, ink, true))
+        settingsPage.addView(label(
+            "SlowDNS Lite menggunakan satu konfigurasi dns://. Tempel konfigurasi di Beranda, lalu pilih IMPORT CONFIG.",
+            14f, muted
+        ).apply { setPadding(0, dp(12), 0, dp(16)) })
+        val reset = button("HAPUS KONFIGURASI", Color.rgb(225, 225, 225), ink)
+        reset.setOnClickListener {
+            configInput.setText("")
+            dns.setText("1.1.1.1")
+            domain.setText("")
+            pubkey.setText("")
+            sshHost.setText("")
+            sshPort.setText("22")
+            sshUser.setText("")
+            sshPass.setText("")
+            getSharedPreferences("slowdns_profile", MODE_PRIVATE).edit().clear().apply()
+            Toast.makeText(this, "Konfigurasi dihapus", Toast.LENGTH_SHORT).show()
         }
-        settingsPage.addView(save)
+        settingsPage.addView(reset)
+        settingsPage.addView(label(
+            "Versi UI baru · profil DNS tunggal · SSH over DNS",
+            12f, muted
+        ).apply { setPadding(0, dp(18), 0, 0) })
         content.addView(settingsPage)
 
         val logsPage = LinearLayout(this).apply {
