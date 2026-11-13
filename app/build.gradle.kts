@@ -31,3 +31,8 @@ android {
         }
     }
 }
+
+
+dependencies {
+    implementation("com.github.mwiede:jsch:0.2.25")
+}
