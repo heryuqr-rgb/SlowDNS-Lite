@@ -2,6 +2,7 @@ package id.litevpn.slowdns
 
 import android.app.Activity
 import android.net.VpnService
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.graphics.Color
@@ -57,6 +58,7 @@ class MainActivity : Activity() {
     }
 
     private fun stopEngine() {
+        try { stopService(Intent(this, SlowDnsVpnService::class.java)) } catch (_: Exception) { }
         stopping = true
         val session = sshSession
         sshSession = null
@@ -119,6 +121,16 @@ class MainActivity : Activity() {
     }
 
     private fun startEngine() {
+        val vpnIntent = Intent(this, SlowDnsVpnService::class.java).setAction(SlowDnsVpnService.ACTION_START)
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) startForegroundService(vpnIntent) else startService(vpnIntent)
+            appendLog("Starting Android VPN service and TUN interface (no routes yet).")
+        } catch (e: Exception) {
+            appendLog("VPN service failed to start: ${e.message}")
+            status.text = "●  VPN SERVICE ERROR"
+            status.setTextColor(Color.rgb(255, 100, 100))
+            return
+        }
         val resolver = dns.text.toString().trim().let {
             if (it.contains(":")) it else "$it:53"
         }
