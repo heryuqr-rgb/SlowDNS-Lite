@@ -110,6 +110,22 @@ class MainActivity : Activity() {
                     status.text = "●  SSH CONNECTED (TUNNEL)"
                     status.setTextColor(Color.rgb(90, 210, 150))
                 }
+                try {
+                    val vpnIntent = Intent(this@MainActivity, SlowDnsVpnService::class.java)
+                        .setAction(SlowDnsVpnService.ACTION_START)
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        startForegroundService(vpnIntent)
+                    } else {
+                        startService(vpnIntent)
+                    }
+                    appendLog("SSH is up. Starting Android VPN interface now.")
+                } catch (e: Exception) {
+                    appendLog("SSH connected, but VPN service failed: ${e.message}")
+                    runOnUiThread {
+                        status.text = "●  SSH OPEN / VPN SERVICE ERROR"
+                        status.setTextColor(Color.rgb(255, 150, 90))
+                    }
+                }
             } catch (e: Exception) {
                 appendLog("SSH connection failed: ${e.message}")
                 runOnUiThread {
@@ -151,16 +167,6 @@ class MainActivity : Activity() {
             return
         }
 
-        val vpnIntent = Intent(this, SlowDnsVpnService::class.java).setAction(SlowDnsVpnService.ACTION_START)
-        try {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) startForegroundService(vpnIntent) else startService(vpnIntent)
-            appendLog("Starting Android VPN service and TUN interface (no routes yet).")
-        } catch (e: Exception) {
-            appendLog("VPN service failed to start: ${e.message}")
-            status.text = "●  VPN SERVICE ERROR"
-            status.setTextColor(Color.rgb(255, 100, 100))
-            return
-        }
         stopping = false
         try {
             val command = listOf(
