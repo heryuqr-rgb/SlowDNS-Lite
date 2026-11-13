@@ -171,6 +171,17 @@ class MainActivity : Activity() {
                                     status.text = "●  DNS TUNNEL SESSION OPEN"
                                     status.setTextColor(Color.rgb(90, 210, 150))
                                 }
+                                if (sshSession?.isConnected != true) {
+                                    appendLog("DNS session is open; starting SSH handshake through local tunnel.")
+                                    startSshOverTunnel()
+                                }
+                            }
+                            if (line.contains("operation not permitted", ignoreCase = true)) {
+                                runOnUiThread {
+                                    status.text = "●  DNS UDP BLOCKED"
+                                    status.setTextColor(Color.rgb(255, 150, 90))
+                                }
+                                appendLog("UDP resolver traffic was denied by Android/network. Check another active VPN or try a different DNS resolver/network.")
                             }
                         }
                     }
