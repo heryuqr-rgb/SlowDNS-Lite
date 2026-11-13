@@ -1,0 +1,23 @@
+name: Check upstream SLDNS engine
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download upstream client for inspection only
+        run: |
+          curl -fL --retry 3 \
+            https://raw.githubusercontent.com/fisabiliyusri/SLDNS/main/slowdns/sldns-client \
+            -o /tmp/sldns-client
+      - name: Inspect binary architecture
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y file binutils
+          file /tmp/sldns-client
+          readelf -h /tmp/sldns-client || true
+          chmod +x scripts/check-sldns-client.sh
+          scripts/check-sldns-client.sh /tmp/sldns-client
