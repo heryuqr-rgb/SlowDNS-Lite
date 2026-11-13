@@ -23,4 +23,11 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+    
+    packaging {
+        jniLibs {
+            // Extract the executable so the app can launch it with ProcessBuilder.
+            useLegacyPackaging = true
+        }
+    }
 }
