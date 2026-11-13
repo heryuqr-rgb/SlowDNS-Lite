@@ -219,7 +219,7 @@ class MainActivity : Activity() {
             setBackgroundColor(bg)
             isFillViewport = true
             clipToPadding = false
-            addView(root, ScrollView.LayoutParams(
+            addView(root, ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ))
