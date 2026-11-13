@@ -1,0 +1,50 @@
+name: Build SLDNS Android ARM64 engine
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/build-sldns-android.yml"
+permissions:
+  contents: read
+jobs:
+  build-engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+      - name: Checkout reviewed dnstt source
+        run: |
+          git clone --depth 1 --branch master https://github.com/OutlineFoundation/dnstt.git /tmp/dnstt
+          git -C /tmp/dnstt rev-parse HEAD
+      - name: Configure Android NDK compiler
+        run: |
+          NDK="$ANDROID_NDK_LATEST_HOME"
+          test -n "$NDK"
+          find "$NDK/toolchains/llvm/prebuilt" -path '*/bin/aarch64-linux-android24-clang' -print -quit
+          echo "NDK=$NDK" >> "$GITHUB_ENV"
+      - name: Build Android ARM64 client
+        working-directory: /tmp/dnstt
+        run: |
+          TOOLCHAIN="$(find "$NDK/toolchains/llvm/prebuilt" -type f -name aarch64-linux-android24-clang -print -quit)"
+          test -x "$TOOLCHAIN"
+          export GOOS=android
+          export GOARCH=arm64
+          export CGO_ENABLED=1
+          export CC="$TOOLCHAIN"
+          export CXX="${TOOLCHAIN%-clang}-clang++"
+          go build -trimpath -ldflags="-s -w" -o "$GITHUB_WORKSPACE/sldns-client-android-arm64" ./dnstt-client
+      - name: Inspect Android binary
+        run: |
+          file sldns-client-android-arm64
+          readelf -h sldns-client-android-arm64
+          readelf -l sldns-client-android-arm64 | grep -i interpreter || true
+          readelf -d sldns-client-android-arm64 | grep NEEDED || true
+          go version -m sldns-client-android-arm64 || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sldns-client-android-arm64-experimental
+          path: sldns-client-android-arm64
+          if-no-files-found: error
