@@ -9,6 +9,8 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.*
+import java.io.BufferedReader
+import java.io.InputStreamReader
 
 class MainActivity : Activity() {
     private lateinit var dns: EditText
@@ -21,10 +23,13 @@ class MainActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var log: TextView
     private lateinit var traffic: TextView
+    @Volatile private var dnsttProcess: Process? = null
+    @Volatile private var stopping = false
 
     private val bg = Color.rgb(12, 18, 30)
     private val panel = Color.rgb(29, 39, 56)
     private val accent = Color.rgb(55, 153, 235)
+    private val localTunnel = "127.0.0.1:7000"
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
@@ -33,6 +38,113 @@ class MainActivity : Activity() {
             setColor(color)
             cornerRadius = dp(radius).toFloat()
         }
+
+    private fun appendLog(message: String) {
+        runOnUiThread {
+            if (::log.isInitialized) {
+                log.text = (log.text.toString() + "\n" + message).takeLast(5000)
+            }
+        }
+    }
+
+    private fun stopEngine() {
+        stopping = true
+        val process = dnsttProcess
+        dnsttProcess = null
+        if (process != null) {
+            process.destroy()
+            Thread {
+                try {
+                    if (!process.waitFor(1500, java.util.concurrent.TimeUnit.MILLISECONDS)) {
+                        process.destroyForcibly()
+                    }
+                } catch (_: Exception) { }
+            }.start()
+        }
+        if (::status.isInitialized) {
+            status.text = "●  DISCONNECTED"
+            status.setTextColor(Color.LTGRAY)
+        }
+        if (::log.isInitialized) appendLog("DNS engine stopped.")
+    }
+
+    private fun startEngine() {
+        val resolver = dns.text.toString().trim().let {
+            if (it.contains(":")) it else "$it:53"
+        }
+        val tunnelDomain = domain.text.toString().trim().trimEnd('.')
+        val key = pubkey.text.toString().trim().replace(" ", "")
+        val missing = when {
+            resolver.isBlank() -> "DNS resolver is required."
+            tunnelDomain.isBlank() -> "Nameserver / tunnel domain is required."
+            !key.matches(Regex("(?i)^[0-9a-f]{64}$")) -> "Public key must be 64 hexadecimal characters."
+            else -> null
+        }
+        if (missing != null) {
+            status.text = "●  PROFILE INCOMPLETE"
+            status.setTextColor(Color.rgb(255, 190, 90))
+            appendLog(missing)
+            return
+        }
+        if (dnsttProcess?.isAlive == true) {
+            appendLog("DNS engine is already running.")
+            return
+        }
+
+        val binary = java.io.File(applicationInfo.nativeLibraryDir, "libdnstt.so")
+        if (!binary.exists()) {
+            status.text = "●  ENGINE MISSING"
+            status.setTextColor(Color.rgb(255, 100, 100))
+            appendLog("Bundled ARM64 DNS engine was not found in the APK.")
+            return
+        }
+
+        stopping = false
+        try {
+            val command = listOf(
+                binary.absolutePath, "-udp", resolver, "-pubkey", key,
+                tunnelDomain, localTunnel
+            )
+            val process = ProcessBuilder(command).redirectErrorStream(true).start()
+            dnsttProcess = process
+            status.text = "●  DNS ENGINE STARTING"
+            status.setTextColor(Color.rgb(255, 190, 90))
+            appendLog("Starting DNS tunnel engine on $localTunnel via $resolver.")
+            Thread {
+                try {
+                    BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
+                        while (true) {
+                            val line = reader.readLine() ?: break
+                            appendLog(line)
+                            if (line.contains("begin session", ignoreCase = true)) {
+                                runOnUiThread {
+                                    status.text = "●  DNS TUNNEL SESSION OPEN"
+                                    status.setTextColor(Color.rgb(90, 210, 150))
+                                }
+                            }
+                        }
+                    }
+                    val exit = process.waitFor()
+                    if (!stopping) {
+                        appendLog("DNS engine exited with code $exit.")
+                        runOnUiThread {
+                            status.text = "●  DNS ENGINE STOPPED"
+                            status.setTextColor(Color.rgb(255, 150, 90))
+                        }
+                    }
+                } catch (e: Exception) {
+                    appendLog("Engine monitor: ${e.message}")
+                } finally {
+                    if (dnsttProcess === process) dnsttProcess = null
+                }
+            }.start()
+        } catch (e: Exception) {
+            dnsttProcess = null
+            status.text = "●  ENGINE ERROR"
+            status.setTextColor(Color.rgb(255, 100, 100))
+            appendLog("Cannot start DNS engine: ${e.message}")
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -98,7 +210,7 @@ class MainActivity : Activity() {
 
         dns = field("1.1.1.1", "1.1.1.1")
         domain = field("Nameserver / Tunnel Domain")
-        pubkey = field("Server Public Key")
+        pubkey = field("Server Public Key (64 hex)")
         sshHost = field("SSH Host")
         sshPort = field("22", "22")
         sshUser = field("SSH Username")
@@ -138,32 +250,9 @@ class MainActivity : Activity() {
         }
 
         val connect = actionButton("CONNECT", accent)
-        connect.setOnClickListener {
-            val missing = when {
-                dns.text.isNullOrBlank() -> "DNS resolver is required."
-                domain.text.isNullOrBlank() -> "Nameserver / tunnel domain is required."
-                pubkey.text.isNullOrBlank() -> "Server public key is required."
-                sshHost.text.isNullOrBlank() -> "SSH host is required."
-                sshUser.text.isNullOrBlank() -> "SSH username is required."
-                sshPort.text.toString().toIntOrNull() !in 1..65535 -> "SSH port must be between 1 and 65535."
-                else -> null
-            }
-            if (missing != null) {
-                log.text = "Log: $missing"
-                status.text = "●  PROFILE INCOMPLETE"
-                status.setTextColor(Color.rgb(255, 190, 90))
-            } else {
-                log.text = "Log: Profile looks valid. SLDNS tunnel engine is not integrated yet."
-                status.text = "●  ENGINE NOT INSTALLED"
-                status.setTextColor(Color.rgb(255, 190, 90))
-            }
-        }
+        connect.setOnClickListener { startEngine() }
         val disconnect = actionButton("DISCONNECT", Color.rgb(70, 80, 98))
-        disconnect.setOnClickListener {
-            status.text = "●  DISCONNECTED"
-            status.setTextColor(Color.LTGRAY)
-            log.text = "Log: Disconnected (no active tunnel)."
-        }
+        disconnect.setOnClickListener { stopEngine() }
         buttonRow.addView(connect, LinearLayout.LayoutParams(0, dp(50), 1f).apply {
             marginEnd = dp(6)
         })
@@ -182,7 +271,7 @@ class MainActivity : Activity() {
                 .putString("sshPort", sshPort.text.toString())
                 .putString("sshUser", sshUser.text.toString())
                 .apply()
-            log.text = "Log: Profile saved. Re-enter SSH password when needed."
+            appendLog("Profile saved. Re-enter SSH password when needed.")
         }
         root.addView(save, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(46)
@@ -229,5 +318,10 @@ class MainActivity : Activity() {
         window.navigationBarColor = bg
         window.decorView.systemUiVisibility = 0
         setContentView(scroll)
+    }
+
+    override fun onDestroy() {
+        stopEngine()
+        super.onDestroy()
     }
 }
