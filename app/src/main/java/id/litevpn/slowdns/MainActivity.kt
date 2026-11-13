@@ -11,6 +11,10 @@ import android.view.ViewGroup
 import android.widget.*
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import java.net.Socket
+import com.jcraft.jsch.JSch
+import com.jcraft.jsch.Session
+import com.jcraft.jsch.SocketFactory
 
 class MainActivity : Activity() {
     private lateinit var dns: EditText
@@ -25,6 +29,7 @@ class MainActivity : Activity() {
     private lateinit var traffic: TextView
     @Volatile private var dnsttProcess: Process? = null
     @Volatile private var stopping = false
+    @Volatile private var sshSession: Session? = null
 
     private val bg = Color.rgb(12, 18, 30)
     private val panel = Color.rgb(29, 39, 56)
@@ -49,6 +54,9 @@ class MainActivity : Activity() {
 
     private fun stopEngine() {
         stopping = true
+        val session = sshSession
+        sshSession = null
+        try { session?.disconnect() } catch (_: Exception) { }
         val process = dnsttProcess
         dnsttProcess = null
         if (process != null) {
@@ -66,6 +74,44 @@ class MainActivity : Activity() {
             status.setTextColor(Color.LTGRAY)
         }
         if (::log.isInitialized) appendLog("DNS engine stopped.")
+    }
+
+    private fun startSshOverTunnel() {
+        val username = sshUser.text.toString().trim()
+        val password = sshPass.text.toString()
+        if (username.isBlank()) {
+            appendLog("SSH username is required.")
+            return
+        }
+        Thread {
+            try {
+                appendLog("Waiting for local DNS tunnel socket $localTunnel ...")
+                val jsch = JSch()
+                val session = jsch.getSession(username, sshHost.text.toString().trim().ifBlank { "slowdns-local" }, 22)
+                session.setPassword(password)
+                session.setConfig("StrictHostKeyChecking", "no")
+                session.setConfig("PreferredAuthentications", "password,keyboard-interactive")
+                session.setSocketFactory(object : SocketFactory {
+                    override fun createSocket(host: String, port: Int): Socket =
+                        Socket("127.0.0.1", 7000)
+                    override fun getInputStream(socket: Socket) = socket.getInputStream()
+                    override fun getOutputStream(socket: Socket) = socket.getOutputStream()
+                })
+                session.connect(20000)
+                sshSession = session
+                appendLog("SSH authentication successful through DNS tunnel.")
+                runOnUiThread {
+                    status.text = "●  SSH CONNECTED (TUNNEL)"
+                    status.setTextColor(Color.rgb(90, 210, 150))
+                }
+            } catch (e: Exception) {
+                appendLog("SSH connection failed: ${e.message}")
+                runOnUiThread {
+                    status.text = "●  DNS OPEN / SSH FAILED"
+                    status.setTextColor(Color.rgb(255, 170, 90))
+                }
+            }
+        }.start()
     }
 
     private fun startEngine() {
