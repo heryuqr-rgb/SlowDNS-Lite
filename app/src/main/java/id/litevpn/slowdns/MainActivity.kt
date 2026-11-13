@@ -1,6 +1,8 @@
 package id.litevpn.slowdns
 
 import android.app.Activity
+import android.net.VpnService
+import android.content.Intent
 import android.os.Bundle
 import android.graphics.Color
 import android.graphics.Typeface
@@ -35,6 +37,8 @@ class MainActivity : Activity() {
     private val panel = Color.rgb(29, 39, 56)
     private val accent = Color.rgb(55, 153, 235)
     private val localTunnel = "127.0.0.1:7000"
+    private val vpnRequestCode = 7401
+    private var pendingConnect = false
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
@@ -296,7 +300,17 @@ class MainActivity : Activity() {
         }
 
         val connect = actionButton("CONNECT", accent)
-        connect.setOnClickListener { startEngine() }
+        connect.setOnClickListener {
+            val prepareIntent = VpnService.prepare(this)
+            if (prepareIntent != null) {
+                pendingConnect = true
+                appendLog("Requesting Android VPN permission.")
+                startActivityForResult(prepareIntent, vpnRequestCode)
+            } else {
+                appendLog("Android VPN permission already granted.")
+                startEngine()
+            }
+        }
         val disconnect = actionButton("DISCONNECT", Color.rgb(70, 80, 98))
         disconnect.setOnClickListener { stopEngine() }
         buttonRow.addView(connect, LinearLayout.LayoutParams(0, dp(50), 1f).apply {
