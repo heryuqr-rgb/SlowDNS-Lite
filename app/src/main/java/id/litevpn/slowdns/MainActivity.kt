@@ -20,6 +20,7 @@ import com.jcraft.jsch.Session
 import com.jcraft.jsch.SocketFactory
 
 class MainActivity : Activity() {
+    private lateinit var configInput: EditText
     private lateinit var dns: EditText
     private lateinit var domain: EditText
     private lateinit var pubkey: EditText
@@ -134,6 +135,50 @@ class MainActivity : Activity() {
                 }
             }
         }.start()
+    }
+
+    private fun importDnsConfig() {
+        try {
+            val raw = configInput.text.toString().trim()
+            require(raw.startsWith("dns://", ignoreCase = true)) { "Config must start with dns://" }
+            val parts = raw.removePrefix("dns://").removePrefix("DNS://").split("#")
+            require(parts.size >= 2) { "Config format is incomplete." }
+
+            val endpoint = parts[0].substringBefore("/")
+            val endpointHost = endpoint.substringBeforeLast(":", endpoint)
+            val endpointPort = endpoint.substringAfterLast(":", "22")
+            require(endpointHost.isNotBlank()) { "SSH host is missing." }
+
+            val tunnelParts = parts[1].split(":")
+            require(tunnelParts.size >= 3) { "Nameserver, public key and DNS resolver are required." }
+            val ns = tunnelParts[0].trim()
+            val key = tunnelParts[1].trim()
+            val resolver = tunnelParts.drop(2).joinToString(":").trim()
+            require(key.matches(Regex("(?i)^[0-9a-f]{64}$"))) { "Public key must contain 64 hex characters." }
+            require(ns.isNotBlank() && resolver.isNotBlank()) { "Nameserver or DNS resolver is empty." }
+
+            var username = ""
+            var password = ""
+            if (parts.size >= 3) {
+                val credentials = parts[2].substringAfter("@", parts[2])
+                username = credentials.substringBefore(":", "").trim()
+                password = credentials.substringAfter(":", "").trim()
+                if (username == "null") username = ""
+            }
+
+            domain.setText(ns)
+            pubkey.setText(key)
+            dns.setText(resolver)
+            sshHost.setText(endpointHost)
+            sshPort.setText(endpointPort)
+            if (username.isNotBlank()) sshUser.setText(username)
+            if (password.isNotBlank()) sshPass.setText(password)
+            appendLog("Config imported. Review SSH host/port and credentials before connecting.")
+            Toast.makeText(this, "DNS config imported", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            appendLog("Config import failed: ${e.message}")
+            Toast.makeText(this, "Config tidak valid: ${e.message}", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun startEngine() {
@@ -287,6 +332,23 @@ class MainActivity : Activity() {
             }
         }
 
+        section("DNS CONFIG")
+        configInput = field("Paste dns:// configuration")
+        root.addView(configInput, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(54)
+        ))
+        val importConfigButton = Button(this).apply {
+            text = "IMPORT CONFIG"
+            isAllCaps = false
+            setTextColor(Color.WHITE)
+            background = rounded(Color.rgb(0, 155, 225), 8)
+            stateListAnimator = null
+        }
+        importConfigButton.setOnClickListener { importDnsConfig() }
+        root.addView(importConfigButton, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(44)
+        ).apply { topMargin = dp(7) })
+
         dns = field("1.1.1.1", "1.1.1.1")
         domain = field("Nameserver / Tunnel Domain")
         pubkey = field("Server Public Key (64 hex)")
@@ -310,6 +372,39 @@ class MainActivity : Activity() {
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(46)
             ))
         }
+
+        section("OPTIONS")
+        val optionsGrid = GridLayout(this).apply {
+            columnCount = 4
+            rowCount = 2
+        }
+        val optionNames = listOf(
+            "Auto Ping", "UDPGW", "DNS", "Block Ads",
+            "Speed Meter", "Auto Reconnect", "Wakelock", "Compression"
+        )
+        val savedOptions = getSharedPreferences("slowdns_options", MODE_PRIVATE)
+        optionNames.forEachIndexed { index, name ->
+            val check = CheckBox(this).apply {
+                text = name
+                textSize = 10f
+                setTextColor(Color.WHITE)
+                buttonTintList = android.content.res.ColorStateList.valueOf(Color.rgb(0, 210, 235))
+                isChecked = savedOptions.getBoolean(name, name == "DNS")
+                setOnCheckedChangeListener { _, checked ->
+                    savedOptions.edit().putBoolean(name, checked).apply()
+                    appendLog("$name ${if (checked) "enabled" else "disabled"} (option saved).")
+                }
+            }
+            optionsGrid.addView(check, GridLayout.LayoutParams().apply {
+                width = 0
+                height = dp(48)
+                columnSpec = GridLayout.spec(index % 4, 1f)
+                rowSpec = GridLayout.spec(index / 4)
+            })
+        }
+        root.addView(optionsGrid, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
 
         val buttonRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -353,6 +448,7 @@ class MainActivity : Activity() {
         val save = actionButton("SAVE PROFILE", Color.rgb(39, 112, 91))
         save.setOnClickListener {
             getSharedPreferences("slowdns_profile", MODE_PRIVATE).edit()
+                .putString("config", configInput.text.toString())
                 .putString("dns", dns.text.toString())
                 .putString("domain", domain.text.toString())
                 .putString("pubkey", pubkey.text.toString())
@@ -386,6 +482,10 @@ class MainActivity : Activity() {
         root.addView(log)
 
         val saved = getSharedPreferences("slowdns_profile", MODE_PRIVATE)
+        configInput.setText(saved.getString("config", ""))
+        configInput.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus && configInput.text.toString().startsWith("dns://")) importDnsConfig()
+        }
         dns.setText(saved.getString("dns", "1.1.1.1"))
         domain.setText(saved.getString("domain", ""))
         pubkey.setText(saved.getString("pubkey", ""))
