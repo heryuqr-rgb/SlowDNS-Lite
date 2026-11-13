@@ -121,16 +121,6 @@ class MainActivity : Activity() {
     }
 
     private fun startEngine() {
-        val vpnIntent = Intent(this, SlowDnsVpnService::class.java).setAction(SlowDnsVpnService.ACTION_START)
-        try {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) startForegroundService(vpnIntent) else startService(vpnIntent)
-            appendLog("Starting Android VPN service and TUN interface (no routes yet).")
-        } catch (e: Exception) {
-            appendLog("VPN service failed to start: ${e.message}")
-            status.text = "●  VPN SERVICE ERROR"
-            status.setTextColor(Color.rgb(255, 100, 100))
-            return
-        }
         val resolver = dns.text.toString().trim().let {
             if (it.contains(":")) it else "$it:53"
         }
@@ -161,6 +151,16 @@ class MainActivity : Activity() {
             return
         }
 
+        val vpnIntent = Intent(this, SlowDnsVpnService::class.java).setAction(SlowDnsVpnService.ACTION_START)
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) startForegroundService(vpnIntent) else startService(vpnIntent)
+            appendLog("Starting Android VPN service and TUN interface (no routes yet).")
+        } catch (e: Exception) {
+            appendLog("VPN service failed to start: ${e.message}")
+            status.text = "●  VPN SERVICE ERROR"
+            status.setTextColor(Color.rgb(255, 100, 100))
+            return
+        }
         stopping = false
         try {
             val command = listOf(
