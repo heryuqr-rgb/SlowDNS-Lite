@@ -1,6 +1,11 @@
-name: Check upstream SLDNS engine
+name: Audit SLDNS Android compatibility
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/check-sldns-client.sh"
+      - ".github/workflows/check-sldns-engine.yml"
 permissions:
   contents: read
 jobs:
@@ -8,16 +13,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Download upstream client for inspection only
+      - name: Download upstream client
         run: |
           curl -fL --retry 3 \
             https://raw.githubusercontent.com/fisabiliyusri/SLDNS/main/slowdns/sldns-client \
             -o /tmp/sldns-client
-      - name: Inspect binary architecture
+      - name: Inspect ELF and Android compatibility indicators
         run: |
           sudo apt-get update
           sudo apt-get install -y file binutils
           file /tmp/sldns-client
-          readelf -h /tmp/sldns-client || true
+          readelf -h /tmp/sldns-client
+          echo "=== ELF interpreter (empty usually means static) ==="
+          readelf -l /tmp/sldns-client | grep -i interpreter || true
+          echo "=== Dynamic dependencies ==="
+          readelf -d /tmp/sldns-client | grep NEEDED || true
+          echo "=== Go build metadata (if present) ==="
+          go version -m /tmp/sldns-client || true
           chmod +x scripts/check-sldns-client.sh
           scripts/check-sldns-client.sh /tmp/sldns-client
