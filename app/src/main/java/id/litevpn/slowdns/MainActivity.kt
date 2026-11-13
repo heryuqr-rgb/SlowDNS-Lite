@@ -35,9 +35,11 @@ class MainActivity : Activity() {
     @Volatile private var stopping = false
     @Volatile private var sshSession: Session? = null
 
-    private val bg = Color.rgb(12, 18, 30)
-    private val panel = Color.rgb(29, 39, 56)
-    private val accent = Color.rgb(55, 153, 235)
+    private val bg = Color.rgb(246, 246, 246)
+    private val panel = Color.rgb(232, 232, 232)
+    private val accent = Color.rgb(42, 45, 48)
+    private val ink = Color.rgb(35, 38, 42)
+    private val muted = Color.rgb(112, 116, 121)
     private val localTunnel = "127.0.0.1:7000"
     private val vpnRequestCode = 7401
     private var pendingConnect = false
@@ -273,179 +275,218 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(22), dp(18), dp(24))
-            setBackgroundColor(bg)
-        }
-
-        val title = TextView(this).apply {
-            text = "SLOWDNS LITE"
-            textSize = 27f
-            letterSpacing = 0.04f
-            setTextColor(Color.WHITE)
-            gravity = Gravity.CENTER
-            setTypeface(null, Typeface.NORMAL)
-            setPadding(0, dp(8), 0, dp(3))
-        }
-        root.addView(title)
-
-        root.addView(TextView(this).apply {
-            text = "SSH over DNS  •  Manual profile"
-            textSize = 14f
-            setTextColor(Color.rgb(105, 190, 255))
-            gravity = Gravity.CENTER
-            setPadding(0, 0, 0, dp(18))
-        })
-
-        status = TextView(this).apply {
-            text = "●  DISCONNECTED"
-            textSize = 15f
-            setTextColor(Color.LTGRAY)
-            gravity = Gravity.CENTER
-            setPadding(0, dp(8), 0, dp(18))
-        }
-        root.addView(status)
-
-        fun section(text: String) {
-            root.addView(TextView(this).apply {
+        fun card(color: Int = Color.WHITE, radius: Int = 18, stroke: Int = Color.TRANSPARENT): GradientDrawable =
+            GradientDrawable().apply {
+                setColor(color)
+                cornerRadius = dp(radius).toFloat()
+                if (stroke != Color.TRANSPARENT) setStroke(dp(1), stroke)
+            }
+        fun label(text: String, size: Float = 14f, color: Int = ink, bold: Boolean = false) =
+            TextView(this).apply {
                 this.text = text
-                textSize = 12f
-                letterSpacing = 0.06f
-                setTextColor(Color.rgb(190, 202, 220))
-                setPadding(dp(2), dp(11), dp(2), dp(5))
-            })
-        }
-
-        fun field(hintText: String, value: String = "", password: Boolean = false): EditText {
-            return EditText(this).apply {
+                textSize = size
+                setTextColor(color)
+                if (bold) setTypeface(null, Typeface.BOLD)
+            }
+        fun button(text: String, fill: Int, textColor: Int = Color.WHITE): Button =
+            Button(this).apply {
+                this.text = text
+                textSize = 15f
+                isAllCaps = false
+                setTextColor(textColor)
+                background = card(fill, 15, if (fill == Color.WHITE) Color.LTGRAY else fill)
+                stateListAnimator = null
+                minHeight = dp(54)
+            }
+        fun field(hintText: String, value: String = "", password: Boolean = false): EditText =
+            EditText(this).apply {
                 hint = hintText
                 setSingleLine(true)
                 setText(value)
-                textSize = 15f
-                setTextColor(Color.WHITE)
-                setHintTextColor(Color.rgb(135, 146, 164))
-                setPadding(dp(13), dp(9), dp(13), dp(9))
-                background = rounded(panel, 7)
+                textSize = 14f
+                setTextColor(ink)
+                setHintTextColor(muted)
+                setPadding(dp(14), dp(10), dp(14), dp(10))
+                background = card(Color.WHITE, 10, Color.LTGRAY)
                 if (password) inputType = android.text.InputType.TYPE_CLASS_TEXT or
                     android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
             }
-        }
 
-        section("DNS CONFIG")
-        configInput = field("Paste dns:// configuration")
-        root.addView(configInput, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, dp(54)
+        val scrollRoot = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(bg)
+        }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(18), dp(20), dp(14))
+        }
+        scrollRoot.addView(content, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
         ))
-        val importConfigButton = Button(this).apply {
-            text = "IMPORT CONFIG"
-            isAllCaps = false
+
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(8), dp(10), dp(8), dp(18))
+        }
+        val shield = label("⬟", 34f, ink, true)
+        header.addView(shield, LinearLayout.LayoutParams(dp(52), dp(54)))
+        val brandCol = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        brandCol.addView(label("SlowDNS", 25f, ink, true))
+        brandCol.addView(label("Koneksi DNS terenkripsi", 14f, muted))
+        header.addView(brandCol, LinearLayout.LayoutParams(0, -2, 1f))
+        val settingsIcon = button("⚙", Color.TRANSPARENT, ink)
+        settingsIcon.background = card(Color.TRANSPARENT, 12)
+        header.addView(settingsIcon, LinearLayout.LayoutParams(dp(54), dp(48)))
+        content.addView(header)
+
+        status = label("●  Belum terhubung", 14f, muted)
+        status.gravity = Gravity.CENTER
+        status.setPadding(0, dp(4), 0, dp(16))
+        content.addView(status)
+
+        val homePage = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val configCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(16), dp(18), dp(18))
+            background = card(Color.rgb(55, 58, 61), 18, Color.rgb(205, 205, 205))
+        }
+        configCard.addView(label("KONFIGURASI SLOWDNS", 14f, Color.WHITE, true))
+        configInput = EditText(this).apply {
+            hint = "dns://server.example:443#ns.example.net\\npayload: public-key:8.8.8.8"
             setTextColor(Color.WHITE)
-            background = rounded(Color.rgb(0, 155, 225), 8)
-            stateListAnimator = null
+            setHintTextColor(Color.LTGRAY)
+            textSize = 14f
+            minLines = 2
+            maxLines = 4
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            background = card(Color.rgb(38, 40, 43), 14, Color.rgb(70, 72, 75))
         }
-        importConfigButton.setOnClickListener { importDnsConfig() }
-        root.addView(importConfigButton, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, dp(44)
-        ).apply { topMargin = dp(7) })
+        configCard.addView(configInput, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(104)
+        ).apply { topMargin = dp(12) })
+        val importButton = button("IMPORT CONFIG", Color.rgb(70, 73, 76))
+        importButton.setOnClickListener { importDnsConfig() }
+        configCard.addView(importButton, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(42)
+        ).apply { topMargin = dp(8) })
+        homePage.addView(configCard)
 
-        dns = field("1.1.1.1", "1.1.1.1")
-        domain = field("Nameserver / Tunnel Domain")
-        pubkey = field("Server Public Key (64 hex)")
-        sshHost = field("SSH Host")
-        sshPort = field("22", "22")
-        sshUser = field("SSH Username")
-        sshPass = field("SSH Password", password = true)
-
-        val fields = listOf(
-            "DNS RESOLVER" to dns,
-            "NAMESERVER" to domain,
-            "PUBLIC KEY" to pubkey,
-            "SSH HOST" to sshHost,
-            "SSH PORT" to sshPort,
-            "SSH USERNAME" to sshUser,
-            "SSH PASSWORD (OPTIONAL)" to sshPass
-        )
-        fields.forEach { (caption, input) ->
-            section(caption)
-            root.addView(input, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(46)
-            ))
-        }
-
-        section("OPTIONS")
-        val optionsGrid = GridLayout(this).apply {
-            columnCount = 4
-            rowCount = 2
-        }
         val optionNames = listOf(
             "Auto Ping", "UDPGW", "DNS", "Block Ads",
-            "Speed Meter", "Auto Reconnect", "Wakelock", "Compression"
+            "Speed Meter", "Auto Reconnect", "WakeLock", "Compression"
         )
+        val optionsGrid = GridLayout(this).apply { columnCount = 2 }
         val savedOptions = getSharedPreferences("slowdns_options", MODE_PRIVATE)
-        optionNames.forEachIndexed { index, name ->
+        optionNames.forEach { name ->
             val check = CheckBox(this).apply {
                 text = name
-                textSize = 10f
-                setTextColor(Color.WHITE)
-                buttonTintList = android.content.res.ColorStateList.valueOf(Color.rgb(0, 210, 235))
+                textSize = 14f
+                setTextColor(ink)
+                buttonTintList = android.content.res.ColorStateList(
+                    arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+                    intArrayOf(Color.rgb(104, 164, 35), Color.rgb(95, 99, 103))
+                )
                 isChecked = savedOptions.getBoolean(name, name == "DNS")
                 setOnCheckedChangeListener { _, checked ->
                     savedOptions.edit().putBoolean(name, checked).apply()
-                    appendLog("$name ${if (checked) "enabled" else "disabled"} (option saved).")
+                    appendLog("$name ${if (checked) "aktif" else "nonaktif"} (opsi disimpan).")
                 }
             }
             optionsGrid.addView(check, GridLayout.LayoutParams().apply {
                 width = 0
-                height = dp(48)
-                columnSpec = GridLayout.spec(index % 4, 1f)
-                rowSpec = GridLayout.spec(index / 4)
+                height = dp(58)
+                columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
+                setMargins(dp(2), dp(4), dp(2), dp(4))
             })
         }
-        root.addView(optionsGrid, LinearLayout.LayoutParams(
+        homePage.addView(optionsGrid, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ))
+        ).apply { topMargin = dp(12) })
 
-        val buttonRow = LinearLayout(this).apply {
+        val profileCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(13), dp(16), dp(13))
+            background = card(Color.rgb(242, 242, 242), 18, Color.rgb(220, 220, 220))
+        }
+        profileCard.addView(label("Profil Server", 13f, muted, true))
+        val profileRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            setPadding(0, dp(20), 0, dp(4))
+            gravity = Gravity.CENTER_VERTICAL
         }
-
-        fun actionButton(text: String, color: Int): Button = Button(this).apply {
-            this.text = text
-            textSize = 13f
-            isAllCaps = false
-            setTextColor(Color.WHITE)
-            background = rounded(color, 9)
-            minHeight = dp(48)
-            minimumHeight = dp(48)
-            stateListAnimator = null
+        val previous = button("‹", Color.rgb(225, 225, 225), ink)
+        val profileName = label("SlowDNS Profile 1", 17f, ink, true)
+        profileName.gravity = Gravity.CENTER
+        val next = button("›", Color.rgb(225, 225, 225), ink)
+        val copy = button("▢", Color.TRANSPARENT, muted)
+        copy.background = card(Color.TRANSPARENT, 8)
+        previous.setOnClickListener { appendLog("Profil sebelumnya belum dibuat; simpan beberapa profil pada pembaruan berikutnya.") }
+        next.setOnClickListener { appendLog("Profil berikutnya belum dibuat; simpan beberapa profil pada pembaruan berikutnya.") }
+        copy.setOnClickListener {
+            val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("SlowDNS config", configInput.text))
+            Toast.makeText(this, "Config disalin", Toast.LENGTH_SHORT).show()
         }
+        profileRow.addView(previous, LinearLayout.LayoutParams(dp(48), dp(48)))
+        profileRow.addView(profileName, LinearLayout.LayoutParams(0, -2, 1f))
+        profileRow.addView(next, LinearLayout.LayoutParams(dp(48), dp(48)))
+        profileRow.addView(copy, LinearLayout.LayoutParams(dp(48), dp(48)))
+        profileCard.addView(profileRow)
+        val count = label("1 dari 9", 12f, muted)
+        count.gravity = Gravity.CENTER
+        profileCard.addView(count)
+        homePage.addView(profileCard, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(16) })
 
-        val connect = actionButton("CONNECT", accent)
+        val connect = button("HUBUNGKAN", Color.rgb(49, 52, 55))
+        connect.textSize = 18f
+        connect.setTypeface(null, Typeface.BOLD)
+        homePage.addView(connect, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(76)
+        ).apply { topMargin = dp(18) })
         connect.setOnClickListener {
             val prepareIntent = VpnService.prepare(this)
             if (prepareIntent != null) {
                 pendingConnect = true
-                appendLog("Requesting Android VPN permission.")
+                appendLog("Meminta izin VPN Android.")
                 startActivityForResult(prepareIntent, vpnRequestCode)
             } else {
-                appendLog("Android VPN permission already granted.")
+                appendLog("Izin VPN Android sudah diberikan.")
                 startEngine()
             }
         }
-        val disconnect = actionButton("DISCONNECT", Color.rgb(70, 80, 98))
-        disconnect.setOnClickListener { stopEngine() }
-        buttonRow.addView(connect, LinearLayout.LayoutParams(0, dp(50), 1f).apply {
-            marginEnd = dp(6)
+        homePage.addView(label("●  Belum terhubung", 14f, muted).apply {
+            gravity = Gravity.CENTER
+            setPadding(0, dp(12), 0, dp(8))
         })
-        buttonRow.addView(disconnect, LinearLayout.LayoutParams(0, dp(50), 1f).apply {
-            marginStart = dp(6)
-        })
-        root.addView(buttonRow)
+        content.addView(homePage)
 
-        val save = actionButton("SAVE PROFILE", Color.rgb(39, 112, 91))
+        val settingsPage = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+        }
+        settingsPage.addView(label("Pengaturan koneksi", 20f, ink, true))
+        dns = field("DNS Resolver", "1.1.1.1")
+        domain = field("Nameserver / Tunnel Domain")
+        pubkey = field("Server Public Key (64 hex)")
+        sshHost = field("SSH Host")
+        sshPort = field("SSH Port", "22")
+        sshUser = field("SSH Username")
+        sshPass = field("SSH Password", password = true)
+        val settingFields = listOf(
+            "DNS RESOLVER" to dns, "NAMESERVER" to domain, "PUBLIC KEY" to pubkey,
+            "SSH HOST" to sshHost, "SSH PORT" to sshPort, "SSH USERNAME" to sshUser,
+            "SSH PASSWORD" to sshPass
+        )
+        settingFields.forEach { (caption, input) ->
+            settingsPage.addView(label(caption, 12f, muted, true))
+            settingsPage.addView(input, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(48)
+            ).apply { bottomMargin = dp(8) })
+        }
+        val save = button("SIMPAN PROFIL", Color.rgb(104, 164, 35))
         save.setOnClickListener {
             getSharedPreferences("slowdns_profile", MODE_PRIVATE).edit()
                 .putString("config", configInput.text.toString())
@@ -454,38 +495,29 @@ class MainActivity : Activity() {
                 .putString("pubkey", pubkey.text.toString())
                 .putString("sshHost", sshHost.text.toString())
                 .putString("sshPort", sshPort.text.toString())
-                .putString("sshUser", sshUser.text.toString())
-                .apply()
-            appendLog("Profile saved. Re-enter SSH password when needed.")
+                .putString("sshUser", sshUser.text.toString()).apply()
+            Toast.makeText(this, "Profil disimpan", Toast.LENGTH_SHORT).show()
         }
-        root.addView(save, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, dp(46)
-        ).apply { topMargin = dp(8) })
+        settingsPage.addView(save)
+        content.addView(settingsPage)
 
-        traffic = TextView(this).apply {
-            text = "TRAFFIC   ↑ 0 B/s     ↓ 0 B/s"
-            textSize = 13f
-            setTextColor(Color.rgb(170, 185, 205))
-            background = rounded(panel, 8)
-            setPadding(dp(12), dp(13), dp(12), dp(13))
+        val logsPage = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
         }
-        root.addView(traffic, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = dp(14) })
+        logsPage.addView(label("Log koneksi", 20f, ink, true))
+        log = label("Log: Ready", 12f, ink)
+        log.setPadding(dp(8), dp(12), dp(8), dp(12))
+        log.background = card(Color.WHITE, 12, Color.LTGRAY)
+        logsPage.addView(log)
+        val clearLog = button("HAPUS LOG", Color.rgb(225, 225, 225), ink)
+        clearLog.setOnClickListener { log.text = "Log: Ready" }
+        logsPage.addView(clearLog)
+        content.addView(logsPage)
 
-        log = TextView(this).apply {
-            text = "Log: Ready"
-            textSize = 12f
-            setTextColor(Color.LTGRAY)
-            setPadding(dp(3), dp(14), dp(3), dp(8))
-        }
-        root.addView(log)
-
+        traffic = label("TRAFFIC   ↑ 0 B/s     ↓ 0 B/s", 12f, muted)
         val saved = getSharedPreferences("slowdns_profile", MODE_PRIVATE)
         configInput.setText(saved.getString("config", ""))
-        configInput.setOnFocusChangeListener { _, hasFocus ->
-            if (!hasFocus && configInput.text.toString().startsWith("dns://")) importDnsConfig()
-        }
         dns.setText(saved.getString("dns", "1.1.1.1"))
         domain.setText(saved.getString("domain", ""))
         pubkey.setText(saved.getString("pubkey", ""))
@@ -493,20 +525,56 @@ class MainActivity : Activity() {
         sshPort.setText(saved.getString("sshPort", "22"))
         sshUser.setText(saved.getString("sshUser", ""))
 
+        fun showPage(page: String) {
+            homePage.visibility = if (page == "home") View.VISIBLE else View.GONE
+            settingsPage.visibility = if (page == "settings") View.VISIBLE else View.GONE
+            logsPage.visibility = if (page == "logs") View.VISIBLE else View.GONE
+        }
+        val nav = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(dp(8), dp(7), dp(8), dp(7))
+            setBackgroundColor(Color.WHITE)
+        }
+        fun navItem(text: String, page: String) {
+            val item = TextView(this).apply {
+                this.text = text
+                textSize = 13f
+                gravity = Gravity.CENTER
+                setTextColor(if (page == "home") ink else muted)
+                setPadding(dp(4), dp(8), dp(4), dp(8))
+                setOnClickListener { showPage(page) }
+            }
+            nav.addView(item, LinearLayout.LayoutParams(0, dp(48), 1f))
+        }
+        settingsIcon.setOnClickListener { showPage("settings") }
+        navItem("⌂\\nBeranda", "home")
+        navItem("▤\\nLog", "logs")
+        navItem("⚙\\nPengaturan", "settings")
+        scrollRoot.addView(nav, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(62)
+        ))
+
         val scroll = ScrollView(this).apply {
             setBackgroundColor(bg)
             isFillViewport = true
-            clipToPadding = false
-            addView(root, ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
+            addView(content, ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ))
+        }
+        val outer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(scroll, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+            ))
+            addView(nav)
         }
         window.decorView.setBackgroundColor(bg)
         window.statusBarColor = bg
         window.navigationBarColor = bg
-        window.decorView.systemUiVisibility = 0
-        setContentView(scroll)
+        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or
+            View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+        setContentView(outer)
     }
 
     override fun onDestroy() {
